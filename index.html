@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Celtics Win Predictor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .wrapper {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            font-size: 2.2em;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        h1 .gradient-text {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: #aaa;
+            font-size: 0.9em;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (min-width: 1400px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+                gap: 18px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stats-card {
+            grid-column: 1 / -1;
+        }
+
+        .stats-card .card h2 {
+            display: none;
+        }
+
+        .stats-card .stats-grid {
+            margin-bottom: 0;
+        }
+
+        @media (min-width: 1400px) {
+            .stats-card .stats-grid {
+                gap: 8px;
+            }
+
+            .stats-card .stat-box {
+                padding: 10px;
+            }
+
+            .stats-card .stat-value {
+                font-size: 1.4em;
+            }
+
+            .stats-card .stat-label {
+                font-size: 0.7em;
+            }
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        @media (min-width: 800px) {
+            .form-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .form-grid {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 20px;
+        }
+
+        @media (min-width: 1400px) {
+            .card {
+                padding: 18px;
+            }
+        }
+
+        .card h2 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: #4CAF50;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            font-size: 0.85em;
+        }
+
+        @media (min-width: 1400px) {
+            .form-group {
+                margin-bottom: 10px;
+            }
+
+            label {
+                margin-bottom: 3px;
+                font-size: 0.8em;
+            }
+        }
+
+        .location-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        @media (min-width: 1400px) {
+            .location-selector {
+                margin-bottom: 10px;
+            }
+        }
+
+        .location-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .location-btn.active {
+            background: #4CAF50;
+            border-color: #4CAF50;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .location-btn:hover:not(.active) {
+            border-color: rgba(76, 175, 80, 0.5);
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95em;
+            transition: all 0.3s ease;
+        }
+
+        @media (min-width: 1400px) {
+            input[type="number"] {
+                padding: 8px 10px;
+                font-size: 0.9em;
+            }
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.12);
+            border-color: #4CAF50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.2);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 8px;
+        }
+
+        @media (min-width: 1400px) {
+            button {
+                padding: 10px;
+                font-size: 0.95em;
+                margin-top: 6px;
+            }
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(76, 175, 80, 0.4);
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 18px;
+            background: rgba(76, 175, 80, 0.1);
+            border: 2px solid rgba(76, 175, 80, 0.3);
+            border-radius: 12px;
+            display: none;
+        }
+
+        @media (min-width: 1400px) {
+            .result {
+                margin-top: 15px;
+                padding: 15px;
+            }
+        }
+
+        .result.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .prediction-outcome {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            text-align: center;
+        }
+
+        .win {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .loss {
+            color: #f44336;
+            font-weight: bold;
+        }
+
+        .probability-bars {
+            margin-top: 15px;
+        }
+
+        .prob-item {
+            margin-bottom: 10px;
+        }
+
+        @media (min-width: 1400px) {
+            .prob-item {
+                margin-bottom: 8px;
+            }
+        }
+
+        .prob-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        @media (min-width: 1400px) {
+            .prob-label {
+                margin-bottom: 3px;
+                font-size: 0.8em;
+            }
+        }
+
+        .prob-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            height: 25px;
+            overflow: hidden;
+        }
+
+        @media (min-width: 1400px) {
+            .prob-bar {
+                height: 20px;
+            }
+        }
+
+        .prob-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85em;
+            transition: width 0.5s ease;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        @media (min-width: 1400px) {
+            .stats-grid {
+                gap: 10px;
+                margin-bottom: 15px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat-box {
+            background: rgba(76, 175, 80, 0.1);
+            border: 2px solid rgba(76, 175, 80, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        @media (min-width: 1400px) {
+            .stat-box {
+                padding: 12px;
+            }
+        }
+
+        .stat-value {
+            font-size: 1.7em;
+            font-weight: bold;
+            color: #4CAF50;
+            margin-bottom: 3px;
+        }
+
+        @media (min-width: 1400px) {
+            .stat-value {
+                font-size: 1.5em;
+                margin-bottom: 2px;
+            }
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #aaa;
+        }
+
+        @media (min-width: 1400px) {
+            .stat-label {
+                font-size: 0.75em;
+            }
+        }
+
+        .games-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+
+        .games-table thead {
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .games-table th {
+            padding: 8px;
+            text-align: left;
+            font-weight: 600;
+            color: #4CAF50;
+            border-bottom: 2px solid rgba(76, 175, 80, 0.3);
+            white-space: nowrap;
+            font-size: 0.85em;
+        }
+
+        .games-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.85em;
+        }
+
+        .games-table tr:hover {
+            background: rgba(76, 175, 80, 0.05);
+        }
+
+        .correct {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .incorrect {
+            color: #f44336;
+            font-weight: bold;
+        }
+
+        .location-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .stat-number {
+            color: #aaa;
+            font-size: 0.85em;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top: 3px solid #4CAF50;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #f44336;
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(244, 67, 54, 0.1);
+            border-left: 3px solid #f44336;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+            <h1>🏀 <span class="gradient-text">Celtics AI</span></h1>
+            <p class="subtitle">Win Prediction Model</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Statistics Section (compact) -->
+            <div class="card stats-card">
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-box">
+                        <div class="stat-value">--</div>
+                        <div class="stat-label">Overall Accuracy</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">--</div>
+                        <div class="stat-label">Home Accuracy</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">--</div>
+                        <div class="stat-label">Away Accuracy</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prediction Form Section -->
+            <div class="card">
+                <h2>Make a Prediction</h2>
+
+                <div class="location-selector">
+                    <button class="location-btn active" data-location="home">Home Game</button>
+                    <button class="location-btn" data-location="away">Away Game</button>
+                </div>
+
+                <form id="predictionForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="fg_pct">Field Goal % (FG%)</label>
+                            <input type="number" id="fg_pct" name="fg_pct" step="0.01" min="0" max="1" placeholder="0.45" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="fg3_pct">3-Point % (FG3%)</label>
+                            <input type="number" id="fg3_pct" name="fg3_pct" step="0.01" min="0" max="1" placeholder="0.35" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="fta">Free Throw Attempts (FTA)</label>
+                            <input type="number" id="fta" name="fta" step="0.1" min="0" placeholder="20" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="oreb">Offensive Rebounds (OREB)</label>
+                            <input type="number" id="oreb" name="oreb" step="0.1" min="0" placeholder="10" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="dreb">Defensive Rebounds (DREB)</label>
+                            <input type="number" id="dreb" name="dreb" step="0.1" min="0" placeholder="30" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="stl">Steals (STL)</label>
+                            <input type="number" id="stl" name="stl" step="0.1" min="0" placeholder="8" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="blk">Blocks (BLK)</label>
+                            <input type="number" id="blk" name="blk" step="0.1" min="0" placeholder="5" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="tov">Turnovers (TOV)</label>
+                            <input type="number" id="tov" name="tov" step="0.1" min="0" placeholder="12" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="pf">Personal Fouls (PF)</label>
+                            <input type="number" id="pf" name="pf" step="0.1" min="0" placeholder="18" required>
+                        </div>
+                    </div>
+
+                    <button type="submit">Predict Win</button>
+                </form>
+
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Making prediction...</p>
+                </div>
+
+                <div class="error" id="error"></div>
+
+                <div class="result" id="result">
+                    <div class="prediction-outcome" id="outcome"></div>
+                    <div class="probability-bars">
+                        <div class="prob-item">
+                            <div class="prob-label">
+                                <span>Win Probability</span>
+                                <span id="winProb">0%</span>
+                            </div>
+                            <div class="prob-bar">
+                                <div class="prob-fill" id="winBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="prob-item">
+                            <div class="prob-label">
+                                <span>Loss Probability</span>
+                                <span id="lossProb">0%</span>
+                            </div>
+                            <div class="prob-bar">
+                                <div class="prob-fill" id="lossBar" style="width: 0%; background: linear-gradient(90deg, #f44336, #da190b);"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Games Section -->
+        <div class="card">
+            <h2>Upload Games</h2>
+            <p style="color: #aaa; margin-bottom: 15px; font-size: 0.9em;">Upload a CSV file with games to add to training data. Model will automatically retrain on all data (historical + uploaded).</p>
+            
+            <div id="uploadArea" style="border: 2px dashed #4CAF50; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.3s; background: rgba(76, 175, 80, 0.05);">
+                <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                <div style="color: #4CAF50; font-size: 1.3em; margin-bottom: 10px;">📁</div>
+                <div style="color: #fff; margin-bottom: 5px;">Click to upload or drag & drop</div>
+                <div style="color: #aaa; font-size: 0.85em;">CSV format: location, date, opponent, fg_pct, fg3_pct, fta, oreb, dreb, stl, blk, tov, pf, actual_result</div>
+            </div>
+
+            <div id="uploadStatus" style="margin-top: 15px; display: none;">
+                <div id="uploadMessage" style="color: #4CAF50;"></div>
+            </div>
+
+            <div id="uploadError" style="margin-top: 15px; color: #f44336; display: none;"></div>
+        </div>
+
+        <!-- Bottom: Game-by-Game Results -->
+        <div class="card">
+            <h2>Recent Game Predictions</h2>
+            <div style="overflow-x: auto;">
+                <table class="games-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Opp</th>
+                            <th>Type</th>
+                            <th>FG%</th>
+                            <th>3P%</th>
+                            <th>FTA</th>
+                            <th>OREB</th>
+                            <th>DREB</th>
+                            <th>STL</th>
+                            <th>BLK</th>
+                            <th>TOV</th>
+                            <th>PF</th>
+                            <th>Pred</th>
+                            <th>Actual</th>
+                            <th>Prob</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gamesTableBody">
+                        <tr>
+                            <td colspan="15" style="text-align: center; color: #aaa;">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedLocation = "home";
+
+        // Location selector
+        document.querySelectorAll(".location-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                document.querySelectorAll(".location-btn").forEach(b => b.classList.remove("active"));
+                e.target.classList.add("active");
+                selectedLocation = e.target.dataset.location;
+            });
+        });
+
+        // Upload functionality
+        const uploadArea = document.getElementById("uploadArea");
+        const csvFile = document.getElementById("csvFile");
+        const uploadStatus = document.getElementById("uploadStatus");
+        const uploadMessage = document.getElementById("uploadMessage");
+        const uploadError = document.getElementById("uploadError");
+
+        uploadArea.addEventListener("click", () => csvFile.click());
+
+        uploadArea.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            uploadArea.style.background = "rgba(76, 175, 80, 0.15)";
+            uploadArea.style.borderColor = "#45a049";
+        });
+
+        uploadArea.addEventListener("dragleave", () => {
+            uploadArea.style.background = "rgba(76, 175, 80, 0.05)";
+            uploadArea.style.borderColor = "#4CAF50";
+        });
+
+        uploadArea.addEventListener("drop", (e) => {
+            e.preventDefault();
+            uploadArea.style.background = "rgba(76, 175, 80, 0.05)";
+            uploadArea.style.borderColor = "#4CAF50";
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                csvFile.files = files;
+                handleFileUpload(files[0]);
+            }
+        });
+
+        csvFile.addEventListener("change", (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+
+        async function handleFileUpload(file) {
+            uploadError.style.display = "none";
+            uploadStatus.style.display = "none";
+
+            if (!file.name.endsWith(".csv")) {
+                uploadError.textContent = "Error: Please upload a CSV file";
+                uploadError.style.display = "block";
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            uploadMessage.textContent = "Uploading and retraining model...";
+            uploadStatus.style.display = "block";
+
+            try {
+                const response = await fetch("/upload-games", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    uploadMessage.innerHTML = `✓ Successfully uploaded ${data.games_count} games! Model has been retrained on all data.`;
+                    uploadMessage.style.color = "#4CAF50";
+                    
+                    // Reload game stats after successful upload
+                    setTimeout(() => {
+                        loadGameStats();
+                        csvFile.value = ""; // Reset file input
+                    }, 1000);
+                } else {
+                    uploadError.textContent = "Error: " + data.error;
+                    uploadError.style.display = "block";
+                    uploadStatus.style.display = "none";
+                }
+            } catch (err) {
+                uploadError.textContent = "Error: " + err.message;
+                uploadError.style.display = "block";
+                uploadStatus.style.display = "none";
+            }
+        }
+
+        // Load game statistics on page load
+        window.addEventListener("load", loadGameStats);
+
+        async function loadGameStats() {
+            try {
+                const response = await fetch("/game-stats");
+                const data = await response.json();
+
+                // Update stat boxes with game counts in parentheses
+                document.querySelectorAll(".stat-box")[0].innerHTML = `
+                    <div class="stat-value">${data.overall_accuracy.toFixed(1)}%</div>
+                    <div class="stat-label">Overall Accuracy (n=${data.total_games})</div>
+                `;
+                document.querySelectorAll(".stat-box")[1].innerHTML = `
+                    <div class="stat-value">${data.home_accuracy.toFixed(1)}%</div>
+                    <div class="stat-label">Home Accuracy (n=${data.home_games_count})</div>
+                `;
+                document.querySelectorAll(".stat-box")[2].innerHTML = `
+                    <div class="stat-value">${data.away_accuracy.toFixed(1)}%</div>
+                    <div class="stat-label">Away Accuracy (n=${data.away_games_count})</div>
+                `;
+
+                // Update games table
+                populateGamesTable(data.recent_games);
+            } catch (err) {
+                console.error("Error loading game stats:", err);
+            }
+        }
+
+        function populateGamesTable(games) {
+            const tbody = document.getElementById("gamesTableBody");
+            tbody.innerHTML = "";
+
+            if (games.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="16" style="text-align: center; color: #aaa;">No games found</td></tr>';
+                return;
+            }
+
+            games.forEach(game => {
+                const row = document.createElement("tr");
+                const isCorrect = game.correct;
+                const accuracyClass = isCorrect ? "correct" : "incorrect";
+                const accuracyText = isCorrect ? "✓" : "✗";
+                const predictionText = game.prediction ? "W" : "L";
+                const actualText = game.actual ? "W" : "L";
+                const locationBadge = game.location === "home" ? "H" : "A";
+                
+                // Format date with year
+                const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
+
+                row.innerHTML = `
+                    <td>${dateStr}</td>
+                    <td>${game.opponent || "?"}</td>
+                    <td><span class="location-badge">${locationBadge}</span></td>
+                    <td>${(game.fg_pct_home || game.fg_pct_away || 0).toFixed(3)}</td>
+                    <td>${(game.fg3_pct_home || game.fg3_pct_away || 0).toFixed(3)}</td>
+                    <td>${(game.fta_home || game.fta_away || 0).toFixed(1)}</td>
+                    <td>${(game.oreb_home || game.oreb_away || 0).toFixed(1)}</td>
+                    <td>${(game.dreb_home || game.dreb_away || 0).toFixed(1)}</td>
+                    <td>${(game.stl_home || game.stl_away || 0).toFixed(1)}</td>
+                    <td>${(game.blk_home || game.blk_away || 0).toFixed(1)}</td>
+                    <td>${(game.tov_home || game.tov_away || 0).toFixed(1)}</td>
+                    <td>${(game.pf_home || game.pf_away || 0).toFixed(1)}</td>
+                    <td>${predictionText}</td>
+                    <td>${actualText}</td>
+                    <td>${(game.win_prob * 100).toFixed(0)}%</td>
+                    <td class="${accuracyClass}">${accuracyText}</td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // Form submission
+        document.getElementById("predictionForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const loading = document.getElementById("loading");
+            const error = document.getElementById("error");
+            const result = document.getElementById("result");
+
+            loading.style.display = "block";
+            error.classList.remove("show");
+            result.classList.remove("show");
+
+            const formData = {
+                location: selectedLocation,
+                fg_pct: parseFloat(document.getElementById("fg_pct").value),
+                fg3_pct: parseFloat(document.getElementById("fg3_pct").value),
+                fta: parseFloat(document.getElementById("fta").value),
+                oreb: parseFloat(document.getElementById("oreb").value),
+                dreb: parseFloat(document.getElementById("dreb").value),
+                stl: parseFloat(document.getElementById("stl").value),
+                blk: parseFloat(document.getElementById("blk").value),
+                tov: parseFloat(document.getElementById("tov").value),
+                pf: parseFloat(document.getElementById("pf").value)
+            };
+
+            try {
+                const response = await fetch("/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error("Prediction failed");
+
+                const data = await response.json();
+                displayResult(data);
+            } catch (err) {
+                error.textContent = "Error: " + err.message;
+                error.classList.add("show");
+            } finally {
+                loading.style.display = "none";
+            }
+        });
+
+        function displayResult(data) {
+            const result = document.getElementById("result");
+            const outcome = document.getElementById("outcome");
+            const winProb = document.getElementById("winProb");
+            const lossProb = document.getElementById("lossProb");
+            const winBar = document.getElementById("winBar");
+            const lossBar = document.getElementById("lossBar");
+
+            const winProbPercent = (data.win_probability * 100).toFixed(1);
+            const lossProbPercent = (data.loss_probability * 100).toFixed(1);
+
+            outcome.innerHTML = data.win_prediction
+                ? '<span class="win">✓ Celtics WIN</span>'
+                : '<span class="loss">✗ Celtics LOSS</span>';
+
+            winProb.textContent = winProbPercent + "%";
+            lossProb.textContent = lossProbPercent + "%";
+
+            setTimeout(() => {
+                winBar.style.width = winProbPercent + "%";
+                winBar.textContent = winProbPercent + "%";
+                lossBar.style.width = lossProbPercent + "%";
+                lossBar.textContent = lossProbPercent + "%";
+            }, 100);
+
+            result.classList.add("show");
+        }
+    </script>
+</body>
+</html>
