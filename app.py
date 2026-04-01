@@ -1,7 +1,7 @@
 """FastAPI backend for Celtics win prediction."""
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 import pickle
 import pandas as pd
 
@@ -28,6 +28,12 @@ class PredictionRequest(BaseModel):
     efg_pct: float
     tov_pct: float
     orb_pct: float
+
+    @validator("location")
+    def validate_location(cls, v):
+        if v.lower() not in ("home", "away"):
+            raise ValueError("location must be 'home' or 'away'")
+        return v.lower()
 
 
 @app.get("/")
