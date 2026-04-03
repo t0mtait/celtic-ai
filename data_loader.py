@@ -82,7 +82,7 @@ def load_celtics_games(data_dir: str = "data") -> pd.DataFrame:
     percent_cols = ["tov_pct", "orb_pct"]
     for col in percent_cols:
         if col in data.columns:
-            data[col] = pd.to_numeric(data[col], errors="coerce") / 100.0
+            data[col] = (pd.to_numeric(data[col], errors="coerce") / 100.0).round(3)
 
     # Ensure other numeric columns are properly typed
     for col in FEATURE_COLUMNS:

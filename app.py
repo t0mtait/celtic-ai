@@ -1,7 +1,7 @@
 """FastAPI backend for Celtics win prediction."""
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, field_validator
 import pickle
 import pandas as pd
 
@@ -23,14 +23,15 @@ game_predictions = pd.read_csv("models/game_predictions.csv")
 
 class PredictionRequest(BaseModel):
     location: str  # "home" or "away"
-    pace: float
-    ftr: float
-    efg_pct: float
-    tov_pct: float
-    orb_pct: float
+    pace: float = Field(..., ge=0, le=200, description="Game pace (typical NBA range: 85-105)")
+    ftr: float = Field(..., ge=0, le=1, description="Free Throw Rate (0-1)")
+    efg_pct: float = Field(..., ge=0, le=1, description="Effective FG% (0-1)")
+    tov_pct: float = Field(..., ge=0, le=1, description="Turnover % (0-1)")
+    orb_pct: float = Field(..., ge=0, le=1, description="Offensive Rebound % (0-1)")
 
-    @validator("location")
-    def validate_location(cls, v):
+    @field_validator("location")
+    @classmethod
+    def validate_location(cls, v: str) -> str:
         if v.lower() not in ("home", "away"):
             raise ValueError("location must be 'home' or 'away'")
         return v.lower()
@@ -80,6 +81,13 @@ async def game_stats():
     recent_games["date"] = pd.to_datetime(recent_games["date"], errors="coerce")
     recent_games = recent_games.sort_values("date", ascending=False).head(20)
     recent_games["date"] = recent_games["date"].dt.strftime("%Y-%m-%d")
+
+    # Round float columns to avoid floating-point precision artifacts
+    float_cols = ["pace", "ftr", "efg_pct", "tov_pct", "orb_pct", "win_prob"]
+    for col in float_cols:
+        if col in recent_games.columns:
+            recent_games[col] = recent_games[col].round(3)
+
     recent_games = recent_games.where(pd.notna(recent_games), None)
     recent_games = recent_games.to_dict("records")
     
