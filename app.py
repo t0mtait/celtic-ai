@@ -1,6 +1,5 @@
 """FastAPI backend for Celtics win prediction."""
 import os
-from contextlib import suppress
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
