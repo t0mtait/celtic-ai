@@ -108,4 +108,9 @@ all_games.to_csv("models/game_predictions.csv", index=False)
 
 print("\nModels saved to models/")
 print(f"Game predictions saved: {len(all_games)} games")
-print(f"Overall accuracy on test set: {(all_games['correct'].sum() / len(all_games) * 100):.2f}%")
+# Calculate accuracy on held-out test sets only (not training data)
+home_correct = (model_home.predict(X_test1) == y_test1).sum()
+away_correct = (model_away.predict(X_test2) == y_test2).sum()
+total_test = len(y_test1) + len(y_test2)
+test_correct = home_correct + away_correct
+print(f"Overall accuracy on held-out test set: {(test_correct / total_test * 100):.2f}%")
