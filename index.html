@@ -528,6 +528,10 @@
                         <div class="stat-label">Away Accuracy</div>
                     </div>
                 </div>
+                <div class="loading" id="statsLoading">
+                    <div class="spinner"></div>
+                </div>
+                <div class="error" id="statsError"></div>
             </div>
 
             <!-- Prediction Form Section -->
@@ -543,12 +547,12 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="pace">Pace</label>
-                            <input type="number" id="pace" name="pace" step="0.1" min="0" placeholder="98.5" required>
+                            <input type="number" id="pace" name="pace" step="0.1" min="0" placeholder="96.5" required>
                         </div>
 
                         <div class="form-group">
                             <label for="ftr">Free Throw Rate (FTr)</label>
-                            <input type="number" id="ftr" name="ftr" step="0.001" min="0" max="1" placeholder="0.22" required>
+                            <input type="number" id="ftr" name="ftr" step="0.001" min="0" max="1" placeholder="0.23" required>
                         </div>
 
                         <div class="form-group">
@@ -558,12 +562,12 @@
 
                         <div class="form-group">
                             <label for="tov_pct">Turnover % (TOV%)</label>
-                            <input type="number" id="tov_pct" name="tov_pct" step="0.001" min="0" max="1" placeholder="0.13" required>
+                            <input type="number" id="tov_pct" name="tov_pct" step="0.001" min="0" max="1" placeholder="0.14" required>
                         </div>
 
                         <div class="form-group">
                             <label for="orb_pct">Offensive Rebound % (ORB%)</label>
-                            <input type="number" id="orb_pct" name="orb_pct" step="0.001" min="0" max="1" placeholder="0.25" required>
+                            <input type="number" id="orb_pct" name="orb_pct" step="0.001" min="0" max="1" placeholder="0.23" required>
                         </div>
                     </div>
 
@@ -650,20 +654,28 @@
         window.addEventListener("load", loadGameStats);
 
         async function loadGameStats() {
+            const statsLoading = document.getElementById("statsLoading");
+            const statsError = document.getElementById("statsError");
+            const statBoxes = document.querySelectorAll(".stat-box");
+
+            statsLoading.style.display = "block";
+            statsError.classList.remove("show");
+
             try {
                 const response = await fetch("/game-stats");
+                if (!response.ok) throw new Error("Failed to load game statistics");
                 const data = await response.json();
 
                 // Update stat boxes with game counts in parentheses
-                document.querySelectorAll(".stat-box")[0].innerHTML = `
+                statBoxes[0].innerHTML = `
                     <div class="stat-value">${data.overall_accuracy.toFixed(1)}%</div>
                     <div class="stat-label">Overall Accuracy (n=${data.total_games})</div>
                 `;
-                document.querySelectorAll(".stat-box")[1].innerHTML = `
+                statBoxes[1].innerHTML = `
                     <div class="stat-value">${data.home_accuracy.toFixed(1)}%</div>
                     <div class="stat-label">Home Accuracy (n=${data.home_games_count})</div>
                 `;
-                document.querySelectorAll(".stat-box")[2].innerHTML = `
+                statBoxes[2].innerHTML = `
                     <div class="stat-value">${data.away_accuracy.toFixed(1)}%</div>
                     <div class="stat-label">Away Accuracy (n=${data.away_games_count})</div>
                 `;
@@ -672,6 +684,17 @@
                 populateGamesTable(data.recent_games);
             } catch (err) {
                 console.error("Error loading game stats:", err);
+                statsError.textContent = "Failed to load statistics. Please refresh the page.";
+                statsError.classList.add("show");
+                // Show placeholder values
+                statBoxes.forEach(box => {
+                    box.innerHTML = `
+                        <div class="stat-value">--</div>
+                        <div class="stat-label">Unavailable</div>
+                    `;
+                });
+            } finally {
+                statsLoading.style.display = "none";
             }
         }
 
@@ -684,6 +707,12 @@
                 return;
             }
 
+            function escapeHtml(text) {
+                const div = document.createElement("div");
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
             games.forEach(game => {
                 const row = document.createElement("tr");
                 const isCorrect = game.correct;
@@ -692,7 +721,7 @@
                 const predictionText = game.prediction ? "W" : "L";
                 const actualText = game.actual ? "W" : "L";
                 const locationBadge = game.location === "home" ? "H" : "A";
-                
+
                 // Format date with year
                 const dateStr = game.date
                     ? new Date(game.date + "T00:00:00Z").toLocaleDateString("en-US", {
@@ -705,7 +734,7 @@
 
                 row.innerHTML = `
                     <td>${dateStr}</td>
-                    <td>${game.opponent || "?"}</td>
+                    <td>${escapeHtml(game.opponent || "?")}</td>
                     <td><span class="location-badge">${locationBadge}</span></td>
                     <td>${(game.pace || 0).toFixed(1)}</td>
                     <td>${(game.ftr || 0).toFixed(3)}</td>

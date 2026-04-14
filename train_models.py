@@ -1,7 +1,6 @@
 """Train and save the Celtics prediction models."""
 import os
 import pandas as pd
-import numpy as np
 import pickle
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
@@ -45,7 +44,7 @@ X_train2, X_test2, y_train2, y_test2 = train_test_split(
     stratify=y2
 )
 
-model_away = LogisticRegression(max_iter=1000)
+model_away = LogisticRegression(max_iter=2000, class_weight='balanced', solver='lbfgs')
 model_away.fit(X_train2, y_train2)
 
 y_pred2 = model_away.predict(X_test2)
@@ -60,7 +59,7 @@ X_train1, X_test1, y_train1, y_test1 = train_test_split(
     stratify=y1
 )
 
-model_home = LogisticRegression(max_iter=1000)
+model_home = LogisticRegression(max_iter=2000, class_weight='balanced', solver='lbfgs')
 model_home.fit(X_train1, y_train1)
 
 y_pred1 = model_home.predict(X_test1)
@@ -109,4 +108,9 @@ all_games.to_csv("models/game_predictions.csv", index=False)
 
 print("\nModels saved to models/")
 print(f"Game predictions saved: {len(all_games)} games")
-print(f"Overall accuracy on test set: {(all_games['correct'].sum() / len(all_games) * 100):.2f}%")
+# Calculate accuracy on held-out test sets only (not training data)
+home_correct = (model_home.predict(X_test1) == y_test1).sum()
+away_correct = (model_away.predict(X_test2) == y_test2).sum()
+total_test = len(y_test1) + len(y_test2)
+test_correct = home_correct + away_correct
+print(f"Overall accuracy on held-out test set: {(test_correct / total_test * 100):.2f}%")
