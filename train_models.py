@@ -7,6 +7,7 @@ import json
 import argparse
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report
@@ -27,12 +28,26 @@ def extract_insights(model_home, model_away, df, feature_cols):
     """
     insights = []
 
+    feat_names = {
+        "pace": "Pace",
+        "ftr": "Free Throw Rate",
+        "efg_pct": "Effective FG%",
+        "tov_pct": "Turnover %",
+        "orb_pct": "Offensive Rebound %",
+    }
+
     for location, model in [("home", model_home), ("away", model_away)]:
         if model is None:
             continue
 
         coef = dict(zip(feature_cols, model.coef_[0]))
         medians = df[feature_cols].median()
+
+        # Pre-compute baseline log-odds and probability (once per model)
+        log_odds_baseline = model.intercept_[0] + sum(
+            c * medians[f] for f, c in zip(feature_cols, model.coef_[0])
+        )
+        p_baseline = 1 / (1 + np.exp(-log_odds_baseline))
 
         for feat, coeff in coef.items():
             if abs(coeff) < 0.01:
@@ -46,20 +61,15 @@ def extract_insights(model_home, model_away, df, feature_cols):
                 direction = "lower"
                 symbol = "↓"
 
-            # Short readable names
-            feat_names = {
-                "pace": "Pace",
-                "ftr": "Free Throw Rate",
-                "efg_pct": "Effective FG%",
-                "tov_pct": "Turnover %",
-                "orb_pct": "Offensive Rebound %",
-            }
             label = feat_names.get(feat, feat)
 
             # Quantify the effect: for a 1-SD change in this feature,
             # how much does win probability change?
+            # coeff * sd = change in log-odds for 1-SD change
+            # Use sigmoid derivative: d_prob ≈ p * (1-p) * d_log_odds
             sd = df[feat].std()
-            prob_change = abs(coeff) * sd
+            log_odds_change = coeff * sd
+            prob_change = abs(log_odds_change) * p_baseline * (1 - p_baseline)
             prob_pct = prob_change * 100
 
             # Describe the typical range
@@ -94,7 +104,8 @@ def extract_insights(model_home, model_away, df, feature_cols):
     for location, model in [("home", model_home), ("away", model_away)]:
         if model is None:
             continue
-        base_win_prob = 1 / (1 + abs(model.intercept_[0]))
+        # sigmoid(intercept) = probability when all features are at zero
+        base_win_prob = 1 / (1 + np.exp(-model.intercept_[0]))
         insights.append({
             "type": "baseline",
             "location": location,
@@ -171,31 +182,14 @@ def train_models(
 
         # Prepare features and target
         subset = df[FEATURE_COLUMNS].copy()
-        y = df["celtics_win"].values
-        dates = df["date"].values
-        opponents = df["opponent"].values
-        paces = df["pace"].values if "pace" in df.columns else [0] * len(subset)
-        ftrs = df["ftr"].values if "ftr" in df.columns else [0] * len(subset)
-        efg_pcts = df["efg_pct"].values if "efg_pct" in df.columns else [0] * len(subset)
-        tovs = df["tov_pct"].values if "tov_pct" in df.columns else [0] * len(subset)
-        orbs = df["orb_pct"].values if "orb_pct" in df.columns else [0] * len(subset)
 
-        # Drop rows with missing features
+        # Drop rows with missing features using boolean mask on the dataframe
         mask = subset.notna().all(axis=1)
         valid_indices = mask[mask].index
-        subset = subset.loc[valid_indices]
-        y = y[valid_indices.get_indexer(range(len(y)))]
-        dates = dates[valid_indices.get_indexer(range(len(dates)))]
-        opponents = opponents[valid_indices.get_indexer(range(len(opponents)))]
-        paces = paces[valid_indices.get_indexer(range(len(paces)))]
-        ftrs = ftrs[valid_indices.get_indexer(range(len(ftrs)))]
-        efg_pcts = efg_pcts[valid_indices.get_indexer(range(len(efg_pcts)))]
-        tovs = tovs[valid_indices.get_indexer(range(len(tovs)))]
-        orbs = orbs[valid_indices.get_indexer(range(len(orbs)))]
-
-        # Rebuild with proper alignment
         df_valid = df.loc[valid_indices].copy()
-        subset = df_valid[FEATURE_COLUMNS].copy()
+
+        # Extract aligned arrays from the filtered dataframe
+        subset = df_valid[FEATURE_COLUMNS]
         y = df_valid["celtics_win"].values
         dates = df_valid["date"].values
         opponents = df_valid["opponent"].values
@@ -254,21 +248,17 @@ def train_models(
         all_predictions = model.predict(subset)
         all_probs = model.predict_proba(subset)
 
-        # Build predictions DataFrame with required columns
-        pred_df = pd.DataFrame({
-            "date": dates,
-            "opponent": opponents,
-            "location": location,
-            "pace": paces,
-            "ftr": ftrs,
-            "efg_pct": efg_pcts,
-            "tov_pct": tovs,
-            "orb_pct": orbs,
-            "prediction": all_predictions,
-            "actual": y,
-            "win_prob": all_probs[:, 1],
-            "correct": all_predictions == y,
-        })
+        # Build predictions DataFrame from the valid dataframe plus model outputs
+        pred_df = df_valid[["date", "opponent", "location"]].copy()
+        pred_df["pace"] = df_valid["pace"].values
+        pred_df["ftr"] = df_valid["ftr"].values
+        pred_df["efg_pct"] = df_valid["efg_pct"].values
+        pred_df["tov_pct"] = df_valid["tov_pct"].values
+        pred_df["orb_pct"] = df_valid["orb_pct"].values
+        pred_df["prediction"] = all_predictions
+        pred_df["actual"] = y
+        pred_df["win_prob"] = all_probs[:, 1]
+        pred_df["correct"] = all_predictions == y
 
         # Split into train/test predictions for accuracy tracking
         train_preds = pred_df.iloc[:-20]
