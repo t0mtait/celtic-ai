@@ -231,27 +231,16 @@ async def get_team_games(
 
 @app.post("/predict")
 async def predict(request: PredictionRequest):
-    """Predict game outcome based on game stats."""
-    try:
-        model_home, model_away, feature_cols = _load_models_for_team(request.team_code)
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-
+    """Predict Celtics win based on game stats."""
     location = request.location.lower()
     if location == "home":
         model = model_home
-        cols = feature_cols.get("home", FEATURE_COLUMNS)
-    else:
+        cols = feature_cols["home"]
+    elif location == "away":
         model = model_away
-        cols = feature_cols.get("away", FEATURE_COLUMNS)
-
-    # Build feature vector
-    features = pd.DataFrame([[
-        getattr(request, col, 0) for col in cols
-    ]], columns=cols)
-
-    prediction = model.predict(features)[0]
-    probability = model.predict_proba(features)[0]
+        cols = feature_cols["away"]
+    else:
+        return {"error": "Invalid location. Must be 'home' or 'away'."}, 400
 
     return {
         "team_code": request.team_code,
@@ -293,11 +282,11 @@ async def game_stats(team_code: str = Query(default="BOS")):
     # Calculate overall stats
     home_games = game_predictions[game_predictions["location"] == "home"]
     away_games = game_predictions[game_predictions["location"] == "away"]
-
-    overall_accuracy = (game_predictions["correct"].sum() / len(game_predictions) * 100)
-    home_accuracy = (home_games["correct"].sum() / len(home_games) * 100) if len(home_games) > 0 else 0
-    away_accuracy = (away_games["correct"].sum() / len(away_games) * 100) if len(away_games) > 0 else 0
-
+    
+    overall_accuracy = (game_predictions["correct"].sum() / len(game_predictions) * 100) if len(game_predictions) > 0 else 0.0
+    home_accuracy = (home_games["correct"].sum() / len(home_games) * 100) if len(home_games) > 0 else 0.0
+    away_accuracy = (away_games["correct"].sum() / len(away_games) * 100) if len(away_games) > 0 else 0.0
+    
     # Get recent games sorted by date (most recent first)
     recent_games = game_predictions.copy()
     recent_games["date"] = pd.to_datetime(recent_games["date"], errors="coerce")
