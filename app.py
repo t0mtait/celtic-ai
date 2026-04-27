@@ -162,13 +162,19 @@ async def predict(request: PredictionRequest):
     # Load models
     try:
         ml_data = _load_model("ml_model.pkl")
-        sp_data = _load_model("spread_model.pkl")
-        reg_data = _load_model("spread_reg.pkl")
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Models not loaded: {e}. Run train_models.py first.",
+            detail=f"Moneyline model not loaded: {e}. Run train_models.py first.",
         )
+
+    # Try to load spread models (optional - may not exist if no betting line data)
+    spread_models_available = True
+    try:
+        sp_data = _load_model("spread_model.pkl")
+        reg_data = _load_model("spread_reg.pkl")
+    except FileNotFoundError:
+        spread_models_available = False
 
     # Build features
     features = _get_or_compute_features(team, opponent, request.game_date, location)
@@ -179,24 +185,6 @@ async def predict(request: PredictionRequest):
     ml_model = ml_data["model"]
     win_prob = float(ml_model.predict_proba(feature_vec_scaled)[0][1])
     predicted_win = bool(ml_model.predict(feature_vec_scaled)[0])
-
-    # Spread regression (predicted margin in points)
-    reg = reg_data["model"]
-    predicted_margin = float(reg.predict(feature_vec_scaled)[0])
-
-    # Spread classification (will team cover?)
-    sp_model = sp_data["model"]
-    cover_prob = float(sp_model.predict_proba(feature_vec_scaled)[0][1])
-    predicted_cover = bool(sp_model.predict(feature_vec_scaled)[0])
-
-    # Adjust for home/away
-    if location == "home":
-        predicted_spread = round(-predicted_margin, 1)
-    else:
-        predicted_spread = round(predicted_margin, 1)
-
-    # Clamp spread to typical NBA range (-15 to +15)
-    predicted_spread = max(-15, min(15, predicted_spread))
 
     # Moneyline recommendation
     if win_prob > 0.55:
@@ -209,22 +197,56 @@ async def predict(request: PredictionRequest):
         ml_rec = "PASS"
         ml_conf = None
 
-    # Spread recommendation
-    if cover_prob > 0.55:
+    # Spread predictions (if models available)
+    if spread_models_available:
+        # Spread regression (predicted margin in points)
+        reg = reg_data["model"]
+        predicted_margin = float(reg.predict(feature_vec_scaled)[0])
+
+        # Spread classification (will team cover?)
+        sp_model = sp_data["model"]
+        cover_prob = float(sp_model.predict_proba(feature_vec_scaled)[0][1])
+        predicted_cover = bool(sp_model.predict(feature_vec_scaled)[0])
+
+        # Adjust for home/away
         if location == "home":
-            sp_rec = f"BET {team} -{abs(predicted_spread)}"
+            predicted_spread = round(-predicted_margin, 1)
         else:
-            sp_rec = f"BET {team} +{abs(predicted_spread)}"
-        sp_conf = "high" if cover_prob > 0.65 else "medium"
-    elif cover_prob < 0.45:
-        if location == "home":
-            sp_rec = f"BET {opponent} +{abs(predicted_spread)}"
+            predicted_spread = round(predicted_margin, 1)
+
+        # Clamp spread to typical NBA range (-15 to +15)
+        predicted_spread = max(-15, min(15, predicted_spread))
+
+        # Spread recommendation
+        if cover_prob > 0.55:
+            if location == "home":
+                sp_rec = f"BET {team} -{abs(predicted_spread)}"
+            else:
+                sp_rec = f"BET {team} +{abs(predicted_spread)}"
+            sp_conf = "high" if cover_prob > 0.65 else "medium"
+        elif cover_prob < 0.45:
+            if location == "home":
+                sp_rec = f"BET {opponent} +{abs(predicted_spread)}"
+            else:
+                sp_rec = f"BET {opponent} -{abs(predicted_spread)}"
+            sp_conf = "high" if cover_prob < 0.35 else "medium"
         else:
-            sp_rec = f"BET {opponent} -{abs(predicted_spread)}"
-        sp_conf = "high" if cover_prob < 0.35 else "medium"
+            sp_rec = "PASS"
+            sp_conf = None
+
+        spread_result = {
+            "predicted_margin": round(predicted_margin, 1),
+            "predicted_spread": predicted_spread,
+            "cover_probability": cover_prob,
+            "predicted_cover": predicted_cover,
+            "recommendation": sp_rec,
+            "confidence": sp_conf,
+        }
     else:
-        sp_rec = "PASS"
-        sp_conf = None
+        spread_result = {
+            "error": "Spread models not available (no betting line data in training set)",
+            "recommended_action": "Fetch games with betting line data and retrain models",
+        }
 
     return {
         "matchup": f"{team} ({'home' if location == 'home' else 'away'}) vs {opponent}",
@@ -236,14 +258,7 @@ async def predict(request: PredictionRequest):
             "recommendation": ml_rec,
             "confidence": ml_conf,
         },
-        "spread": {
-            "predicted_margin": round(predicted_margin, 1),
-            "predicted_spread": predicted_spread,
-            "cover_probability": cover_prob,
-            "predicted_cover": predicted_cover,
-            "recommendation": sp_rec,
-            "confidence": sp_conf,
-        },
+        "spread": spread_result,
         "features_used": list(ml_data["feature_cols"]),
         "raw_features": {k: round(v, 3) if isinstance(v, float) else v for k, v in features.items()},
     }

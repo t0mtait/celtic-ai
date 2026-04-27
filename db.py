@@ -296,7 +296,8 @@ def get_games(
         params.append(season_year)
     query += " ORDER BY date DESC"
     if limit:
-        query += f" LIMIT {limit}"
+        query += " LIMIT ?"
+        params.append(limit)
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
@@ -331,7 +332,8 @@ def get_matchups(
         params.append(season_year)
     query += " ORDER BY date DESC"
     if limit:
-        query += f" LIMIT {limit}"
+        query += " LIMIT ?"
+        params.append(limit)
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
