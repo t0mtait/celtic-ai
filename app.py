@@ -1,350 +1,237 @@
-"""FastAPI backend for NBA moneyline and spread predictions."""
-from __future__ import annotations
-
-import os
-import json
-import logging
-from typing import Optional
-
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
+"""NBA Win Predictor - Display model data and performance results."""
 import pandas as pd
-import pickle
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from flask import Flask, jsonify, request, render_template_string
+import kagglehub
+import os
 
-import db
-import train_models as tm
-from data_loader import load_games_from_db
+app = Flask(__name__)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Load data once at startup
+path = kagglehub.dataset_download("eoinamoore/historical-nba-data-and-player-box-scores")
+df = pd.read_csv(f"{path}/TeamStatistics.csv")
+featCols = ['teamId', 'home', 'assists', 'reboundsTotal', 'blocks', 'steals',
+            'turnovers', 'foulsPersonal', 'q1Points', 'q2Points',
+            'fieldGoalsAttempted', 'threePointersAttempted', 'freeThrowsAttempted']
+# Columns to display in table (excludes teamId and home, shown separately)
+displayCols = ['assists', 'reboundsTotal', 'blocks', 'steals', 'turnovers',
+               'foulsPersonal', 'q1Points', 'q2Points',
+               'fieldGoalsAttempted', 'threePointersAttempted', 'freeThrowsAttempted']
+# Display labels for table headers (matches displayCols order)
+displayLabels = ['A', 'R', 'B', 'S', 'TO', 'F', 'Q1', 'Q2', 'FGA', '3FA', 'FTA']
+# Preserve columns before dropna for display
+all_game_dates = df['gameDate'].astype(str)
+all_opponent_names = df['opponentTeamName']
+all_team_names = df['teamName']
+df = df.dropna(subset=featCols + ['win'])
+X = df[featCols]
+y = df['win']
 
-app = FastAPI(
-    title="NBA Prediction API",
-    description="Predict NBA moneyline and point spread outcomes for any matchup",
-)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000, random_state=0))
+model.fit(X_train, y_train)
+acc = model.score(X_test, y_test)
 
-MODELS_DIR = os.environ.get("MODELS_DIR", "models")
-DATABASE_PATH = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "nba.db"))
-
-
-def _load_model(name: str) -> dict:
-    """Load a model + scaler bundle from disk."""
-    path = os.path.join(MODELS_DIR, name)
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Model not found: {path}. Run train_models.py first.")
-    with open(path, "rb") as f:
-        return pickle.load(f)
-
-
-def _get_or_compute_features(
-    team: str,
-    opponent: str,
-    game_date: str,
-    location: str,
-    db_path: Optional[str] = None,
-) -> dict:
-    """Get cached features or build them on the fly."""
-    return tm.build_features_for_game(team, opponent, game_date, location, db_path)
+# Model results
+train_preds = model.predict(X_train)
+test_preds = model.predict(X_test)
+train_acc = accuracy_score(y_train, train_preds)
+test_acc = accuracy_score(y_test, test_preds)
 
 
-# ----- Pydantic models -----
+HTML = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBA Win Predictor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #f0f0f5; min-height: 100vh; padding: 24px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px; }
+        h1 { font-size: 1.5rem; font-weight: 800; }
+        h1 span { color: #3ecf6a; }
+        .tagline { color: #888899; font-size: 0.85rem; margin-bottom: 32px; }
+        .dataset-btn { display: inline-block; padding: 8px 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #888899; text-decoration: none; font-size: 0.8rem; transition: all 0.2s; }
+        .dataset-btn:hover { background: rgba(255,255,255,0.1); color: #f0f0f5; }
+        .card { background: #111118; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; margin-bottom: 20px; overflow-x: auto; }
+        .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; text-align: center; }
+        .stat-value { font-size: 1.75rem; font-weight: 800; color: #3ecf6a; }
+        .stat-label { font-size: 0.75rem; color: #888899; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; min-width: 800px; }
+        th { text-align: left; padding: 8px 10px; background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.08); border-right: 1px solid rgba(255,255,255,0.08); color: #888899; font-weight: 600; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.5px; white-space: normal; }
+        td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
+        .badge.win { background: rgba(62,207,106,0.15); color: #3ecf6a; }
+        .badge.loss { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .correct { color: #3ecf6a; }
+        .incorrect { color: #ef4444; }
+        .correct-row td { background: rgba(62,207,106,0.08); }
+        .incorrect-row td { background: rgba(239,68,68,0.08); }
+        .section { margin-top: 24px; }
+        .features { display: flex; flex-wrap: wrap; gap: 8px; }
+        .feature-tag { padding: 4px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; font-size: 0.8rem; color: #888899; }
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 16px; }
+        .pagination a, .pagination span { padding: 6px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #888899; text-decoration: none; font-size: 0.85rem; }
+        .pagination a:hover { background: rgba(255,255,255,0.1); color: #f0f0f5; }
+        .pagination .current { background: rgba(62,207,106,0.15); border-color: rgba(62,207,106,0.3); color: #3ecf6a; }
+        .pagination .disabled { opacity: 0.4; pointer-events: none; }
+        .pagination .page-info { padding: 6px 12px; color: #888899; font-size: 0.85rem; }
+        .legend { display: flex; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 16px; font-size: 0.7rem; color: #888899; }
+        .legend span { white-space: nowrap; }
+        .legend strong { color: #f0f0f5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🏀 NBA <span>Win Predictor</span></h1>
+                <p class="tagline">Logistic Regression on Team Statistics</p>
+            </div>
+            <a class="dataset-btn" href="https://www.kaggle.com/datasets/eoinamoore/historical-nba-data-and-player-box-scores?select=TeamStatistics.csv" target="_blank">📂 View Dataset</a>
+        </div>
 
-class PredictionRequest(BaseModel):
-    team: str = Field(..., description="Team code (e.g. BOS, LAL)")
-    opponent: str = Field(..., description="Opponent team code")
-    game_date: str = Field(..., description="Game date (YYYY-MM-DD)")
-    location: str = Field(..., description="'home' or 'away'")
+        <div class="card">
+            <div class="section-title">📊 Model Performance</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{ "%.1f"|format(test_acc * 100) }}%</div>
+                    <div class="stat-label">Test Accuracy</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ train_games }}</div>
+                    <div class="stat-label">Training Games</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ test_games }}</div>
+                    <div class="stat-label">Testing Games</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ total_games }}</div>
+                    <div class="stat-label">Total Games</div>
+                </div>
+            </div>
+        </div>
 
-    @field_validator("team", "opponent")
-    @classmethod
-    def validate_team_code(cls, v: str) -> str:
-        return v.upper()
+        <div class="card">
+            <div class="section-title">🔧 Feature Columns</div>
+            <div class="features">
+                {% for f in featCols %}
+                <span class="feature-tag">{{ f }}</span>
+                {% endfor %}
+            </div>
+        </div>
 
-    @field_validator("location")
-    @classmethod
-    def validate_location(cls, v: str) -> str:
-        if v.lower() not in ("home", "away"):
-            raise ValueError("location must be 'home' or 'away'")
-        return v.lower()
+        <div class="card">
+            <div class="section-title">📋 Predictions</div>
+            <div class="legend">
+                <span><strong>P</strong> = Predicted Result</span>
+                <span><strong>A</strong> = Actual Result</span>
+                <span><strong>H/A</strong> = Home/Away</span>
+                <span><strong>A</strong> = Assists</span>
+                <span><strong>R</strong> = Rebounds</span>
+                <span><strong>B</strong> = Blocks</span>
+                <span><strong>S</strong> = Steals</span>
+                <span><strong>TO</strong> = Turnovers</span>
+                <span><strong>F</strong> = Fouls</span>
+                <span><strong>Q1/Q2</strong> = Quarter Points</span>
+                <span><strong>FGA</strong> = Field Goals Attempted</span>
+                <span><strong>3FA</strong> = 3-Pointers Attempted</span>
+                <span><strong>FTA</strong> = Free Throws Attempted</span>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Team</th>
+                        <th>Opp</th>
+                        <th>H/A</th>
+                        {% for f in displayLabels %}
+                        <th>{{ f }}</th>
+                        {% endfor %}
+                        <th>P</th>
+                        <th>A</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for _, row in page_items.iterrows() %}
+                    <tr class="{{ 'correct-row' if row.get('correct') else 'incorrect-row' }}">
+                        <td>{{ row.get('gameDate', 'N/A')[:10] if row.get('gameDate') else 'N/A' }}</td>
+                        <td>{{ row.get('teamName', 'N/A') }}</td>
+                        <td>{{ row.get('opponentTeamName', 'N/A') }}</td>
+                        <td><span class="badge">{{ 'Home' if row.get('home') == 1 else 'Away' }}</span></td>
+                        {% for f in displayCols %}
+                        <td>{{ "{:.0f}".format(row.get(f, 0)) }}</td>
+                        {% endfor %}
+                        <td><span class="badge {{ 'win' if row.get('pred') == 1 else 'loss' }}">{{ 'W' if row.get('pred') == 1 else 'L' }}</span></td>
+                        <td><span class="badge {{ 'win' if row.get('actual') == 1 else 'loss' }}">{{ 'W' if row.get('actual') == 1 else 'L' }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="pagination">
+                {% if page > 1 %}
+                <a href="?page={{ page - 1 }}">&laquo; Prev</a>
+                {% else %}
+                <span class="disabled">&laquo; Prev</span>
+                {% endif %}
+                <span class="page-info">{{ page }} / {{ total_pages }}</span>
+                {% if page < total_pages %}
+                <a href="?page={{ page + 1 }}">Next &raquo;</a>
+                {% else %}
+                <span class="disabled">Next &raquo;</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+'''
 
+# Build prediction data for ALL games (train + test), sorted by date descending
+all_X = pd.concat([X_train, X_test])
+all_y = pd.concat([y_train, y_test])
+all_preds = list(train_preds) + list(test_preds)
 
-class FetchRequest(BaseModel):
-    start_year: int = Field(default=2017, ge=2000, le=2030)
-    end_year: int = Field(default=2026, ge=2000, le=2030)
-    force_refresh: bool = Field(default=False)
+predictions_df = all_X.copy()
+predictions_df['actual'] = all_y.values
+predictions_df['pred'] = all_preds
+predictions_df['correct'] = predictions_df['pred'] == predictions_df['actual']
+predictions_df['gameDate'] = all_game_dates.loc[all_X.index].str[:10].values
+predictions_df['opponentTeamName'] = all_opponent_names.loc[all_X.index].values
+predictions_df['teamName'] = all_team_names.loc[all_X.index].values
+predictions_df['home'] = all_X['home'].values
+predictions_df = predictions_df.sort_values('gameDate', ascending=False)
 
+total_games = len(all_X)
+train_games = len(X_train)
+test_games = len(X_test)
+PER_PAGE = 20
 
-# ----- Routes -----
+@app.route('/')
+def index():
+    page = request.args.get('page', 1, type=int)
+    total_pages = (len(predictions_df) + PER_PAGE - 1) // PER_PAGE
+    start = (page - 1) * PER_PAGE
+    end = start + PER_PAGE
+    page_items = predictions_df.iloc[start:end]
+    return render_template_string(HTML, page_items=page_items, featCols=featCols,
+                                   displayCols=displayCols, displayLabels=displayLabels,
+                                   test_acc=test_acc, train_acc=train_acc,
+                                   total_games=total_games, train_games=train_games, test_games=test_games,
+                                   page=page,
+                                   total_pages=total_pages, range=range)
 
-@app.get("/")
-async def root():
-    return FileResponse("index.html")
-
-
-@app.get("/health")
-async def health():
-    ml_exists = os.path.exists(os.path.join(MODELS_DIR, "ml_model.pkl"))
-    sp_exists = os.path.exists(os.path.join(MODELS_DIR, "spread_model.pkl"))
-    return {
-        "status": "healthy" if (ml_exists and sp_exists) else "unhealthy",
-        "moneyline_model": ml_exists,
-        "spread_model": sp_exists,
-        "database": os.path.exists(DATABASE_PATH),
-    }
-
-
-@app.get("/teams")
-async def list_teams():
-    try:
-        return db.get_teams()
-    except Exception as e:
-        logger.error(f"Error fetching teams: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/teams/{team_code}")
-async def get_team(team_code: str):
-    team = db.get_team_info(team_code.upper())
-    if not team:
-        raise HTTPException(status_code=404, detail=f"Team {team_code} not found")
-    return team
-
-
-@app.get("/teams/{team_code}/stats/{season_year}")
-async def get_team_stats(team_code: str, season_year: int):
-    stats = db.get_team_stats(team_code.upper(), season_year)
-    if not stats:
-        raise HTTPException(status_code=404, detail=f"No stats found for {team_code} in {season_year}")
-    return stats
-
-
-@app.get("/teams/{team_code}/injuries")
-async def get_team_injuries(team_code: str):
-    injuries = db.get_injuries(team=team_code.upper())
-    return {"team": team_code.upper(), "injuries": injuries}
-
-
-@app.get("/matchups/{team}/vs/{opponent}")
-async def get_matchup_history(team: str, opponent: str, limit: int = Query(default=20)):
-    team = team.upper()
-    opponent = opponent.upper()
-    games = db.get_recent_matchup(team, opponent, n=limit)
-    return {
-        "matchup": f"{team} vs {opponent}",
-        "team": team,
-        "opponent": opponent,
-        "count": len(games),
-        "games": games,
-    }
-
-
-@app.post("/predict")
-async def predict(request: PredictionRequest):
-    """
-    Predict moneyline and spread for a given matchup.
-    Returns win probability, predicted margin, and recommended bet.
-    """
-    team = request.team.upper()
-    opponent = request.opponent.upper()
-    location = request.location.lower()
-
-    # Load models
-    try:
-        ml_data = _load_model("ml_model.pkl")
-        sp_data = _load_model("spread_model.pkl")
-        reg_data = _load_model("spread_reg.pkl")
-    except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Models not loaded: {e}. Run train_models.py first.",
-        )
-
-    # Build features
-    features = _get_or_compute_features(team, opponent, request.game_date, location)
-    feature_vec = pd.DataFrame([features])[ml_data["feature_cols"]].fillna(0)
-    feature_vec_scaled = ml_data["scaler"].transform(feature_vec)
-
-    # Moneyline prediction
-    ml_model = ml_data["model"]
-    win_prob = float(ml_model.predict_proba(feature_vec_scaled)[0][1])
-    predicted_win = bool(ml_model.predict(feature_vec_scaled)[0])
-
-    # Spread regression (predicted margin in points)
-    reg = reg_data["model"]
-    predicted_margin = float(reg.predict(feature_vec_scaled)[0])
-
-    # Spread classification (will team cover?)
-    sp_model = sp_data["model"]
-    cover_prob = float(sp_model.predict_proba(feature_vec_scaled)[0][1])
-    predicted_cover = bool(sp_model.predict(feature_vec_scaled)[0])
-
-    # Adjust for home/away
-    if location == "home":
-        predicted_spread = round(-predicted_margin, 1)
-    else:
-        predicted_spread = round(predicted_margin, 1)
-
-    # Clamp spread to typical NBA range (-15 to +15)
-    predicted_spread = max(-15, min(15, predicted_spread))
-
-    # Moneyline recommendation
-    if win_prob > 0.55:
-        ml_rec = f"BET {team}"
-        ml_conf = "high" if win_prob > 0.65 else "medium"
-    elif win_prob < 0.45:
-        ml_rec = f"BET {opponent}"
-        ml_conf = "high" if win_prob < 0.35 else "medium"
-    else:
-        ml_rec = "PASS"
-        ml_conf = None
-
-    # Spread recommendation
-    if cover_prob > 0.55:
-        if location == "home":
-            sp_rec = f"BET {team} -{abs(predicted_spread)}"
-        else:
-            sp_rec = f"BET {team} +{abs(predicted_spread)}"
-        sp_conf = "high" if cover_prob > 0.65 else "medium"
-    elif cover_prob < 0.45:
-        if location == "home":
-            sp_rec = f"BET {opponent} +{abs(predicted_spread)}"
-        else:
-            sp_rec = f"BET {opponent} -{abs(predicted_spread)}"
-        sp_conf = "high" if cover_prob < 0.35 else "medium"
-    else:
-        sp_rec = "PASS"
-        sp_conf = None
-
-    return {
-        "matchup": f"{team} ({'home' if location == 'home' else 'away'}) vs {opponent}",
-        "game_date": request.game_date,
-        "location": location,
-        "moneyline": {
-            "win_probability": win_prob,
-            "predicted_win": predicted_win,
-            "recommendation": ml_rec,
-            "confidence": ml_conf,
-        },
-        "spread": {
-            "predicted_margin": round(predicted_margin, 1),
-            "predicted_spread": predicted_spread,
-            "cover_probability": cover_prob,
-            "predicted_cover": predicted_cover,
-            "recommendation": sp_rec,
-            "confidence": sp_conf,
-        },
-        "features_used": list(ml_data["feature_cols"]),
-        "raw_features": {k: round(v, 3) if isinstance(v, float) else v for k, v in features.items()},
-    }
-
-
-@app.get("/model-stats")
-async def model_stats():
-    """Get trained model performance metrics."""
-    results = {}
-    for name, label in [("ml_model.pkl", "moneyline"), ("spread_model.pkl", "spread")]:
-        path = os.path.join(MODELS_DIR, name)
-        if not os.path.exists(path):
-            continue
-        try:
-            with open(os.path.join(MODELS_DIR, f"{label}_insights.json")) as f:
-                insights = json.load(f).get("insights", [])
-            results[label] = {"insights": insights}
-        except Exception:
-            results[label] = {}
-    return results
-
-
-@app.post("/teams/{team_code}/fetch")
-async def fetch_team_games(team_code: str, request: FetchRequest, background_tasks: BackgroundTasks):
-    """Fetch games for a team from basketball-reference.com."""
-    from fetch_basketball_ref import NBA_TEAMS
-
-    team_code = team_code.upper()
-    if team_code not in NBA_TEAMS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown team code: {team_code}. Valid: {list(NBA_TEAMS.keys())}",
-        )
-
-    try:
-        result = db.fetch_team_games(
-            team_code=team_code,
-            start_year=request.start_year,
-            end_year=request.end_year,
-            force_refresh=request.force_refresh,
-        )
-        return result
-    except Exception as e:
-        logger.error(f"Error fetching games for {team_code}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/teams/{team_code}/games")
-async def get_team_games(
-    team_code: str,
-    season_year: Optional[int] = None,
-    limit: Optional[int] = None,
-):
-    team_code = team_code.upper()
-    try:
-        games = db.get_games(team=team_code, season_year=season_year, limit=limit)
-        return {"team": team_code, "count": len(games), "games": games}
-    except Exception as e:
-        logger.error(f"Error fetching games for {team_code}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/db-stats")
-async def db_stats():
-    try:
-        teams = db.get_teams()
-        total_games = sum(t.get("games_in_db", 0) for t in teams)
-        return {"total_teams": len(teams), "total_games": total_games, "teams": teams}
-    except Exception as e:
-        logger.error(f"Error fetching DB stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class TrainRequest(BaseModel):
-    pass
-
-
-@app.post("/api/train")
-async def train_models():
-    """
-    Retrain both moneyline and spread models.
-    Uses all available game data in the database.
-    """
-    logger.info("Training prediction models...")
-
-    try:
-        result = tm.train_models(output_dir=MODELS_DIR, db_path=DATABASE_PATH)
-
-        if "error" in result:
-            raise HTTPException(status_code=400, detail=result["error"])
-
-        logger.info(f"Training complete: {result}")
-        return {"status": "complete", "results": result}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error training models: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
