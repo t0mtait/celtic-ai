@@ -1,0 +1,49 @@
+{
+  "trained_at": "2026-05-03 13:28:42",
+  "train_accuracy": 0.7527,
+  "test_accuracy": 0.7573,
+  "total_games": 138616,
+  "train_games": 124754,
+  "test_games": 13862,
+  "feature_cols": [
+    "home",
+    "assists",
+    "reboundsTotal",
+    "blocks",
+    "steals",
+    "turnovers",
+    "foulsPersonal",
+    "q1Points",
+    "q2Points",
+    "fieldGoalsAttempted",
+    "threePointersAttempted",
+    "freeThrowsAttempted"
+  ],
+  "display_cols": [
+    "assists",
+    "reboundsTotal",
+    "blocks",
+    "steals",
+    "turnovers",
+    "foulsPersonal",
+    "q1Points",
+    "q2Points",
+    "fieldGoalsAttempted",
+    "threePointersAttempted",
+    "freeThrowsAttempted"
+  ],
+  "display_labels": [
+    "A",
+    "R",
+    "B",
+    "S",
+    "TO",
+    "F",
+    "Q1",
+    "Q2",
+    "FGA",
+    "3FA",
+    "FTA"
+  ],
+  "model_class": "LogisticRegression"
+}
